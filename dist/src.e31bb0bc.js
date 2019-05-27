@@ -5,8 +5,6 @@
 //
 // anything defined in a previous bundle is accessed via the
 // orig method which is the require for previous bundles
-
-// eslint-disable-next-line no-global-assign
 parcelRequire = (function (modules, cache, entry, globalName) {
   // Save the require from previous bundle to this closure if any
   var previousRequire = typeof parcelRequire === 'function' && parcelRequire;
@@ -77,8 +75,16 @@ parcelRequire = (function (modules, cache, entry, globalName) {
     }, {}];
   };
 
+  var error;
   for (var i = 0; i < entry.length; i++) {
-    newRequire(entry[i]);
+    try {
+      newRequire(entry[i]);
+    } catch (e) {
+      // Save first error but execute all entries
+      if (!error) {
+        error = e;
+      }
+    }
   }
 
   if (entry.length) {
@@ -103,6 +109,13 @@ parcelRequire = (function (modules, cache, entry, globalName) {
   }
 
   // Override the current require with this new one
+  parcelRequire = newRequire;
+
+  if (error) {
+    // throw error from earlier, _after updating parcelRequire_
+    throw error;
+  }
+
   return newRequire;
 })({"../node_modules/object-assign/index.js":[function(require,module,exports) {
 /*
@@ -27050,7 +27063,7 @@ exports.default = _default;
 Object.defineProperty(exports, "__esModule", {
   value: true
 });
-exports.fetchNewDeck = exports.fetchDeckSuccess = void 0;
+exports.fetchNewDeck = exports.fetchDeckError = exports.fetchDeckSuccess = void 0;
 
 var _types = require("./types");
 
@@ -27058,7 +27071,7 @@ var fetchDeckSuccess = function fetchDeckSuccess(deckJson) {
   var remaining = deckJson.remaining,
       deck_id = deckJson.deck_id;
   return {
-    type: _types.DECK.DECK_FETCH_SUCCESS,
+    type: _types.DECK.FETCH_SUCCESS,
     remaining: remaining,
     deck_id: deck_id
   };
@@ -27066,18 +27079,45 @@ var fetchDeckSuccess = function fetchDeckSuccess(deckJson) {
 
 exports.fetchDeckSuccess = fetchDeckSuccess;
 
+var fetchDeckError = function fetchDeckError(error) {
+  return {
+    type: _types.DECK.FETCH_ERROR,
+    message: error.message
+  };
+};
+
+exports.fetchDeckError = fetchDeckError;
+
 var fetchNewDeck = function fetchNewDeck() {
   return function (dispatch) {
     return fetch('https://deck-of-cards-api-wrapper.appspot.com/deck/new/shuffle').then(function (res) {
+      if (res.status !== 200) {
+        throw new Error('Unsuccessful request to deckofcardsapi.com');
+      }
+
       return res.json();
     }).then(function (json) {
       return dispatch(fetchDeckSuccess(json));
+    }).catch(function (err) {
+      return dispatch(fetchDeckError(err));
     });
   };
 };
 
 exports.fetchNewDeck = fetchNewDeck;
-},{"./types":"actions/types.js"}],"components/App.js":[function(require,module,exports) {
+},{"./types":"actions/types.js"}],"reducer/fetchStates.js":[function(require,module,exports) {
+"use strict";
+
+Object.defineProperty(exports, "__esModule", {
+  value: true
+});
+exports.default = void 0;
+var _default = {
+  success: 'success',
+  error: 'error'
+};
+exports.default = _default;
+},{}],"components/App.js":[function(require,module,exports) {
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -27095,6 +27135,8 @@ var _Instructions = _interopRequireDefault(require("./Instructions"));
 
 var _deck = require("../actions/deck");
 
+var _fetchStates = _interopRequireDefault(require("../reducer/fetchStates"));
+
 function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
 
 function _interopRequireWildcard(obj) { if (obj && obj.__esModule) { return obj; } else { var newObj = {}; if (obj != null) { for (var key in obj) { if (Object.prototype.hasOwnProperty.call(obj, key)) { var desc = Object.defineProperty && Object.getOwnPropertyDescriptor ? Object.getOwnPropertyDescriptor(obj, key) : {}; if (desc.get || desc.set) { Object.defineProperty(newObj, key, desc); } else { newObj[key] = obj[key]; } } } } newObj.default = obj; return newObj; } }
@@ -27111,11 +27153,11 @@ function _possibleConstructorReturn(self, call) { if (call && (_typeof(call) ===
 
 function _getPrototypeOf(o) { _getPrototypeOf = Object.setPrototypeOf ? Object.getPrototypeOf : function _getPrototypeOf(o) { return o.__proto__ || Object.getPrototypeOf(o); }; return _getPrototypeOf(o); }
 
+function _assertThisInitialized(self) { if (self === void 0) { throw new ReferenceError("this hasn't been initialised - super() hasn't been called"); } return self; }
+
 function _inherits(subClass, superClass) { if (typeof superClass !== "function" && superClass !== null) { throw new TypeError("Super expression must either be null or a function"); } subClass.prototype = Object.create(superClass && superClass.prototype, { constructor: { value: subClass, writable: true, configurable: true } }); if (superClass) _setPrototypeOf(subClass, superClass); }
 
 function _setPrototypeOf(o, p) { _setPrototypeOf = Object.setPrototypeOf || function _setPrototypeOf(o, p) { o.__proto__ = p; return o; }; return _setPrototypeOf(o, p); }
-
-function _assertThisInitialized(self) { if (self === void 0) { throw new ReferenceError("this hasn't been initialised - super() hasn't been called"); } return self; }
 
 function _defineProperty(obj, key, value) { if (key in obj) { Object.defineProperty(obj, key, { value: value, enumerable: true, configurable: true, writable: true }); } else { obj[key] = value; } return obj; }
 
@@ -27137,7 +27179,7 @@ function (_Component) {
 
     _this = _possibleConstructorReturn(this, (_getPrototypeOf2 = _getPrototypeOf(App)).call.apply(_getPrototypeOf2, [this].concat(args)));
 
-    _defineProperty(_assertThisInitialized(_assertThisInitialized(_this)), "startGame", function () {
+    _defineProperty(_assertThisInitialized(_this), "startGame", function () {
       _this.props.startGame();
 
       _this.props.fetchNewDeck();
@@ -27150,6 +27192,11 @@ function (_Component) {
     key: "render",
     value: function render() {
       console.log('this', this);
+
+      if (this.props.fetchState === _fetchStates.default.error) {
+        return _react.default.createElement("div", null, _react.default.createElement("p", null, "Please try reloading the App. An error occured"), _react.default.createElement("p", null, this.props.message));
+      }
+
       return _react.default.createElement("div", null, _react.default.createElement("h2", null, "\u2665\uFE0F \u2660\uFE0F Evens Or Odds \u2663\uFE0F \u2666\uFE0F"), this.props.gameStarted ? _react.default.createElement("div", null, _react.default.createElement("h3", null, "The Game Is On !!"), _react.default.createElement("br", null), _react.default.createElement("button", {
         onClick: this.props.cancelGame
       }, "Cancel Game")) : _react.default.createElement("div", null, _react.default.createElement("h3", null, "A new game awaits"), _react.default.createElement("br", null), _react.default.createElement("button", {
@@ -27163,8 +27210,13 @@ function (_Component) {
 
 var mapStateToProps = function mapStateToProps(state) {
   console.log('state : ', state);
+  var gameStarted = state.gameStarted,
+      fetchState = state.fetchState,
+      message = state.message;
   return {
-    gameStarted: state.gameStarted
+    gameStarted: gameStarted,
+    fetchState: fetchState,
+    message: message
   };
 }; // const mapDispatchtoProps = dispatch => {
 //   return { 
@@ -27184,7 +27236,7 @@ var componentConnector = (0, _reactRedux.connect)(mapStateToProps, {
 var _default = componentConnector(App);
 
 exports.default = _default;
-},{"react":"../node_modules/react/index.js","react-redux":"../node_modules/react-redux/es/index.js","../actions/settings":"actions/settings.js","./Instructions":"components/Instructions.jsx","../actions/deck":"actions/deck.js"}],"reducer/index.js":[function(require,module,exports) {
+},{"react":"../node_modules/react/index.js","react-redux":"../node_modules/react-redux/es/index.js","../actions/settings":"actions/settings.js","./Instructions":"components/Instructions.jsx","../actions/deck":"actions/deck.js","../reducer/fetchStates":"reducer/fetchStates.js"}],"reducer/index.js":[function(require,module,exports) {
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -27193,6 +27245,10 @@ Object.defineProperty(exports, "__esModule", {
 exports.default = void 0;
 
 var _types = require("../actions/types");
+
+var _fetchStates = _interopRequireDefault(require("./fetchStates"));
+
+function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
 
 function _objectSpread(target) { for (var i = 1; i < arguments.length; i++) { var source = arguments[i] != null ? arguments[i] : {}; var ownKeys = Object.keys(source); if (typeof Object.getOwnPropertySymbols === 'function') { ownKeys = ownKeys.concat(Object.getOwnPropertySymbols(source).filter(function (sym) { return Object.getOwnPropertyDescriptor(source, sym).enumerable; })); } ownKeys.forEach(function (key) { _defineProperty(target, key, source[key]); }); } return target; }
 
@@ -27219,12 +27275,19 @@ var rootReducer = function rootReducer() {
         instructionsExpanded: action.instructionsExpanded
       });
 
-    case _types.DECK.DECK_FETCH_SUCCESS:
+    case _types.DECK.FETCH_SUCCESS:
       var remaining = action.remaining,
           deck_id = action.deck_id;
       return _objectSpread({}, state, {
         remaining: remaining,
-        deck_id: deck_id
+        deck_id: deck_id,
+        fetchState: _fetchStates.default.success
+      });
+
+    case _types.DECK.FETCH_ERROR:
+      return _objectSpread({}, state, {
+        message: action.message,
+        fetchState: _fetchStates.default.error
       });
 
     default:
@@ -27234,7 +27297,7 @@ var rootReducer = function rootReducer() {
 
 var _default = rootReducer;
 exports.default = _default;
-},{"../actions/types":"actions/types.js"}],"../node_modules/parcel-bundler/src/builtins/bundle-url.js":[function(require,module,exports) {
+},{"../actions/types":"actions/types.js","./fetchStates":"reducer/fetchStates.js"}],"../node_modules/parcel-bundler/src/builtins/bundle-url.js":[function(require,module,exports) {
 var bundleURL = null;
 
 function getBundleURLCached() {
@@ -27250,7 +27313,7 @@ function getBundleURL() {
   try {
     throw new Error();
   } catch (err) {
-    var matches = ('' + err.stack).match(/(https?|file|ftp):\/\/[^)\n]+/g);
+    var matches = ('' + err.stack).match(/(https?|file|ftp|chrome-extension|moz-extension):\/\/[^)\n]+/g);
 
     if (matches) {
       return getBaseURL(matches[0]);
@@ -27261,7 +27324,7 @@ function getBundleURL() {
 }
 
 function getBaseURL(url) {
-  return ('' + url).replace(/^((?:https?|file|ftp):\/\/.+)\/[^/]+$/, '$1') + '/';
+  return ('' + url).replace(/^((?:https?|file|ftp|chrome-extension|moz-extension):\/\/.+)\/[^/]+$/, '$1') + '/';
 }
 
 exports.getBundleURL = getBundleURLCached;
@@ -27363,26 +27426,46 @@ function Module(moduleName) {
 }
 
 module.bundle.Module = Module;
+var checkedAssets, assetsToAccept;
 var parent = module.bundle.parent;
 
 if ((!parent || !parent.isParcelRequire) && typeof WebSocket !== 'undefined') {
   var hostname = "" || location.hostname;
   var protocol = location.protocol === 'https:' ? 'wss' : 'ws';
-  var ws = new WebSocket(protocol + '://' + hostname + ':' + "65362" + '/');
+  var ws = new WebSocket(protocol + '://' + hostname + ':' + "40855" + '/');
 
   ws.onmessage = function (event) {
+    checkedAssets = {};
+    assetsToAccept = [];
     var data = JSON.parse(event.data);
 
     if (data.type === 'update') {
-      console.clear();
-      data.assets.forEach(function (asset) {
-        hmrApply(global.parcelRequire, asset);
-      });
+      var handled = false;
       data.assets.forEach(function (asset) {
         if (!asset.isNew) {
-          hmrAccept(global.parcelRequire, asset.id);
+          var didAccept = hmrAcceptCheck(global.parcelRequire, asset.id);
+
+          if (didAccept) {
+            handled = true;
+          }
         }
+      }); // Enable HMR for CSS by default.
+
+      handled = handled || data.assets.every(function (asset) {
+        return asset.type === 'css' && asset.generated.js;
       });
+
+      if (handled) {
+        console.clear();
+        data.assets.forEach(function (asset) {
+          hmrApply(global.parcelRequire, asset);
+        });
+        assetsToAccept.forEach(function (v) {
+          hmrAcceptRun(v[0], v[1]);
+        });
+      } else {
+        window.location.reload();
+      }
     }
 
     if (data.type === 'reload') {
@@ -27470,7 +27553,7 @@ function hmrApply(bundle, asset) {
   }
 }
 
-function hmrAccept(bundle, id) {
+function hmrAcceptCheck(bundle, id) {
   var modules = bundle.modules;
 
   if (!modules) {
@@ -27478,9 +27561,27 @@ function hmrAccept(bundle, id) {
   }
 
   if (!modules[id] && bundle.parent) {
-    return hmrAccept(bundle.parent, id);
+    return hmrAcceptCheck(bundle.parent, id);
   }
 
+  if (checkedAssets[id]) {
+    return;
+  }
+
+  checkedAssets[id] = true;
+  var cached = bundle.cache[id];
+  assetsToAccept.push([bundle, id]);
+
+  if (cached && cached.hot && cached.hot._acceptCallbacks.length) {
+    return true;
+  }
+
+  return getParents(global.parcelRequire, id).some(function (id) {
+    return hmrAcceptCheck(global.parcelRequire, id);
+  });
+}
+
+function hmrAcceptRun(bundle, id) {
   var cached = bundle.cache[id];
   bundle.hotData = {};
 
@@ -27505,10 +27606,6 @@ function hmrAccept(bundle, id) {
 
     return true;
   }
-
-  return getParents(global.parcelRequire, id).some(function (id) {
-    return hmrAccept(global.parcelRequire, id);
-  });
 }
 },{}]},{},["../node_modules/parcel-bundler/src/builtins/hmr-runtime.js","index.js"], null)
-//# sourceMappingURL=/src.e31bb0bc.map
+//# sourceMappingURL=/src.e31bb0bc.js.map
